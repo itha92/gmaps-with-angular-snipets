@@ -1,0 +1,203 @@
+<div class="search-box col-sm-4 my-1" [ngClass]="streetViewVisible ? 'search-box-street-view' : ''">
+    <div class="input-group">
+      <div class="input-group-prepend">
+        <div class="input-group-text bg-white">
+          <fa-icon icon="search"></fa-icon>
+        </div>
+      </div>
+      <ng-template #custLocation let-result="result" let-term="term">
+        <div >
+          {{result}}
+        </div>
+      </ng-template>
+      <input id="typeahead-basic"
+        type="text"
+        class="form-control py-2 border-left-0 border"
+        [(ngModel)]="searchText"
+        [ngbTypeahead]="searchTextResult"
+        [resultTemplate]="custLocation"
+        [inputFormatter]="formatSearchByText"
+        (selectItem)="moveMapTo($event)"
+        placeholder="Search by name, city, state, zip code"/>
+    </div>
+    <button *ngIf="zoomLevel > 13" class="btn btn-info load-data" (click)="loadNewData()">Refresh Data</button>
+  </div>
+  <div class="layers">
+    <div class="col">
+      <app-layers
+        (sendLayers)="toggleLayersInMap($event)"
+        (toggleRoads)="toggleRoads()"
+        (toggleCitites)="toggleCities()"
+        (toggleTracts)="toggleTracts()"
+        (toggleTractsLabels)="toggleCensusLabels()"
+        (updateShade)="updateShadeTo($event)"
+        (toggleSatelliteRoadMap)="toggleMapView()"
+        (toggleZipCodes)="toggleZipCodes()"
+        >
+      </app-layers>
+    </div>
+  </div>
+  <ngb-alert *ngIf="showMaxZoomAlert" [dismissible]="false">
+    <strong>Warning!</strong> If there is more than 1 charity in the same location, Please click Refresh Data button in top left corner of the map and switch to List view.
+  </ngb-alert>
+  <agm-map
+    [latitude]="lat"
+    [longitude]="lng"
+    [styles]="mapStyle"
+    [zoom]="zoomLevel"
+    [streetViewControl]="false"
+    [streetViewControlOptions]="streetViewOptions"
+    (boundsChange)="boundsChange($event)"
+    (centerChange)="centerChange($event)"
+    (mapClick)="mapClick($event)"
+    (mapReady)="mapReady($event)"
+    (zoomChange)="setZoomLevel($event)"
+    >
+    <!-- Show census tracts with names-->
+    <div *ngIf="tracts$">
+      <div *ngIf="tracts$ as tracts">
+        <div *ngIf="isLayerActiveById(9) && showTracts">
+          <div *ngFor="let tract of tracts.features">
+            <agm-data-layer
+              [geoJson]="tract"
+              [style]="styleFeature"
+              (layerClick)="showClickedTract($event)">
+            </agm-data-layer>
+          </div>
+        </div>
+        <div *ngIf="isLayerActiveById(1) && showCensusLabels">
+          <div *ngFor="let tract of tracts.features">
+            <agm-marker
+              [iconUrl]="iconUrl"
+              [longitude]="tract.properties.xcenter"
+              [latitude]="tract.properties.ycenter"
+              [label]="{color: map.getMapTypeId() === 'satellite' ? 'white' : 'black', text : tract.properties.census_tract}"
+              (markerClick)="showModal(tract)"></agm-marker>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Show small business-->
+    <div *ngIf="isLayerActiveById(4)">
+      <div *ngIf="layer_data$">
+        <div *ngIf="layer_data$.small_businesses">
+          <div *ngIf="layer_data$.small_businesses.data as small_businesses">
+            <agm-marker-cluster
+              imagePath="https://raw.githubusercontent.com/googlemaps/v3-utility-library/master/markerclustererplus/images/m">
+              <agm-marker *ngFor="let sm_bs of small_businesses" [iconUrl]="iconSmBusiness"
+                [longitude]="sm_bs.attributes.position.longitude"
+                [latitude]="sm_bs.attributes.position.latitude" [title]="sm_bs.attributes.name"
+                (markerClick)="showSmallBusinessModal(sm_bs)"></agm-marker>
+            </agm-marker-cluster>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Show charities-->
+    <div *ngIf="isLayerActiveById(5)">
+      <div *ngIf="otherCharities$">
+        <div *ngIf="otherCharities$ as charities">
+          <agm-marker-cluster
+            imagePath="{{clusterIcon}}">
+            <!-- imagePath="https://raw.githubusercontent.com/googlemaps/v3-utility-library/master/markerclustererplus/images/m"> -->
+            <agm-marker *ngFor="let charity of charities"
+              [iconUrl]="iconCharities"
+              [longitude]="charity.attributes.position.longitude"
+              [latitude]="charity.attributes.position.latitude"
+              [title]="charity.attributes.name"
+              (markerClick)="showModal(charity)">
+            </agm-marker>
+        </agm-marker-cluster>
+      </div>
+    </div>
+  </div>
+
+   <!-- Show cra eligible charities-->
+   <div *ngIf="isLayerActiveById(11)">
+    <div *ngIf="craCharities$">
+      <div *ngIf="craCharities$ as charities">
+        <agm-marker-cluster
+        imagePath="{{clusterIcon}}">
+        <agm-marker *ngFor="let charity of charities"
+          [iconUrl]="iconCharities"
+          [longitude]="charity.attributes.position.longitude"
+          [latitude]="charity.attributes.position.latitude"
+          [title]="charity.attributes.name"
+          (markerClick)="showModal(charity)"></agm-marker>
+      </agm-marker-cluster>
+    </div>
+  </div>
+  </div>
+
+    <!-- Show branches-->
+    <div *ngIf="isLayerActiveById(6)">
+      <div *ngIf="layer_data$">
+        <div *ngIf="layer_data$.branches">
+          <div *ngIf="layer_data$.branches.data as branches">
+            <agm-marker-cluster
+              imagePath="https://raw.githubusercontent.com/googlemaps/v3-utility-library/master/markerclustererplus/images/m">
+              <agm-marker *ngFor="let branch of branches" [iconUrl]="iconBankUrl"
+                          [longitude]="branch.attributes.position.longitude"
+                          [latitude]="branch.attributes.position.latitude" [title]="branch.attributes.name"></agm-marker>
+            </agm-marker-cluster>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- pending to add zip codes option-->
+    <div *ngIf="zipCodes$">
+        <div *ngIf="zipCodes$ as zips">
+          <div *ngIf="isLayerActiveById(7)">
+            <div *ngFor="let zip of zips.features">
+              <agm-data-layer
+                [geoJson]="zip"
+                [style]="styleFeatureZipCode"
+              >
+              </agm-data-layer>
+            </div>
+            <div *ngFor="let zip of zips.features">
+              <agm-marker
+                [iconUrl]="iconUrl"
+                [longitude]="zip.properties.xcenter"
+                [latitude]="zip.properties.ycenter"
+                [label]="zip.properties.id.toString()">
+            </agm-marker>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    <!-- Show Billboards-->
+    <div *ngIf="isLayerActiveById(8)">
+      <div *ngIf="layer_data$">
+        <div *ngIf="layer_data$.billboards">
+          <div *ngIf="layer_data$.billboards.data as billboards">
+            <agm-marker-cluster
+              imagePath="https://raw.githubusercontent.com/googlemaps/v3-utility-library/master/markerclustererplus/images/m">
+              <agm-marker *ngFor="let billboard of billboards" [longitude]="billboard.attributes.position.longitude"
+                          [latitude]="billboard.attributes.position.latitude"
+                          [title]="billboard.attributes.name"></agm-marker>
+            </agm-marker-cluster>
+          </div>
+        </div>
+      </div>
+    </div>
+  </agm-map>
+  <div *ngIf="currentShade === 'income' && showTracts" class="card legend" style="width: 8rem;">
+    <span class="shade d-block font-weight-bold border-left upper-income pl-2 mb-1 ml-1 my-2">0-10</span>
+    <span class="shade d-block font-weight-bold border-left middle-income pl-2 mb-1 ml-1 my-2">10-25</span>
+    <span class="shade d-block font-weight-bold border-left middle-income-2 pl-2 mb-1 ml-1 my-2">25-50</span>
+    <span class="shade d-block font-weight-bold border-left moderated-income pl-2 mb-1 ml-1 my-2">50-75</span>
+    <span class="shade d-block font-weight-bold border-left low-income pl-2 mb-1 ml-1 my-2">75</span>
+    <span class="shade d-block font-weight-bold border-left not-available-income pl-2 mb-1 ml-1 my-2">N/A</span>
+  </div>
+  <div *ngIf="currentShade === 'minority' && showTracts" class="card legend" style="width: 8rem;">
+    <span class="shade d-block font-weight-bold border-left upper-income pl-2 mb-1 ml-1 my-2">Upper</span>
+    <span class="shade d-block font-weight-bold border-left middle-income pl-2 mb-1 ml-1 my-2">Middle</span>
+    <span class="shade d-block font-weight-bold border-left moderated-income pl-2 mb-1 ml-1 my-2">Moderate</span>
+    <span class="shade d-block font-weight-bold border-left low-income pl-2 mb-1 ml-1 my-2">Low</span>
+    <span class="shade d-block font-weight-bold border-left not-available-income pl-2 mb-1 ml-1 my-2">N/A</span>
+  </div>
